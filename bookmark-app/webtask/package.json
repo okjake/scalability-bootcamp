@@ -1,0 +1,21 @@
+{
+  "name": "webtask",
+  "version": "1.0.0",
+  "description": "",
+  "main": "scheduler.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1",
+    "deploy:monitor": "",
+    "deploy:publisher": ""
+  },
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "amqplib": "^0.5.2",
+    "aws-sdk": "^2.235.1",
+    "pg": "^7.4.3"
+  },
+  "devDependencies": {
+    "wt-cli": "^9.3.0"
+  }
+}
