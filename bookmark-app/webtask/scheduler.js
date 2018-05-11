@@ -95,7 +95,6 @@ function publishMetricAsync(awsSecretKeyId, awsSecretKey, count) {
 
 function publishToChannel(channel, bookmarks, queueName) {
     bookmarks.forEach(b => {
-        console.log(`Queueing bookmark: ${b.id}`);
         channel.assertQueue(queueName, {
             durable: true
         });
@@ -120,6 +119,8 @@ module.exports = function (ctx, callback) {
                 'RABBIT_URL', 'CHANNEL_NAME', 'AWS_SECRET_KEY_ID', 
                 'AWS_SECRET_KEY', 'DB_URL', 'OPERATION'
             ].filter((envVar) => !secrets[envVar]);
+
+
         
             if (notProvided.length > 0) {
                 console.log("Invalid arguments", notProvided.join(","));
@@ -145,7 +146,7 @@ module.exports = function (ctx, callback) {
                     const bookmarks = await getAllBookmarks(secrets.DB_URL);
                     console.log(`I see ${bookmarks.length} bookmarks in db`);
                     publishToChannel(channel, bookmarks, secrets.CHANNEL_NAME);
-                    console.log('I pushed all to db');
+                    console.log('I pushed all to queue');
                 default:
                     return callback(new Error('Invalid operation'))
             }

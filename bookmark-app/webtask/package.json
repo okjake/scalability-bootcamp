@@ -6,14 +6,14 @@
   "scripts": {
     "test": "echo \"Error: no test specified\" && exit 1",
     "deploy:monitor": "wt cron create ./scheduler.js --secrets-file .env --secret OPERATION=MONITOR --schedule \"* * * * *\" --name monitor",
-    "deploy:publisher": "wt cron create ./scheduler.js --secrets-file .env --secret OPERATION=PUBLISHER --schedule \"* * * * *\" --name publisher",
+    "deploy:publisher": "wt cron create ./scheduler.js --secrets-file .env --secret OPERATION=PUBLISHER --schedule \"20 * * * *\" --name publisher",
     "stats:monitor": "wt cron history monitor",
     "rm:monitor": "wt cron rm monitor",
     "stats:publisher": "wt cron history publisher",
     "rm:publisher": "wt cron rm publisher",
-    "deploy": "npm run deploy:*",
-    "rm": "npm run rm:*",
-    "stats": "npm run stats:*"
+    "deploy": "npm-run-all deploy:*",
+    "rm": "npm-run-all rm:*",
+    "stats": "npm-run-all stats:*"
   },
   "author": "",
   "license": "ISC",
@@ -23,6 +23,7 @@
     "pg": "^7.4.3"
   },
   "devDependencies": {
+    "npm-run-all": "^4.1.3",
     "wt-cli": "^9.3.0"
   }
 }
