@@ -2,7 +2,6 @@
 const AWS = require('aws-sdk');
 const amqp = require('amqplib/callback_api');
 const pg = require('pg');
-const client;
 
 AWS.config.update({
     region: 'us-east-2'
@@ -25,7 +24,7 @@ module.exports = function publishMetric(queueSize) {
 
 function connect(rabbitUrl) {
     return new Promise(function (resolve, reject) {
-        amqp.connect(rabbiturl, function (err, conn) {
+        amqp.connect(rabbitUrl, function (err, conn) {
             if (err) {
                 console.error('Unable to connect to rabbit.');
                 return reject(err);
@@ -59,8 +58,13 @@ function getMessageCountAsync(channel, queueName) {
 }
 
 async function getAllBookmarks(dbUrl) {
-    const client = pg.Client(dbUrl);
+    const client = new pg.Client({
+        connectionString: dbUrl,
+        statement_timeout: 2000
+    });
+    console.log("Connecting to DB");
     await client.connect();
+    console.log("Connected to DB");
     const query = 'SELECT * FROM bookmarks';
     const result = await client.query(query);
     return result.rows;
@@ -68,6 +72,8 @@ async function getAllBookmarks(dbUrl) {
 
 function publishMetricAsync(awsSecretKeyId, awsSecretKey, count) {
     var cw = new AWS.CloudWatch({
+
+
         apiVersion: '2010-08-01',
         accessKeyId: awsSecretKeyId,
         secretAccessKey: awsSecretKey
@@ -101,35 +107,55 @@ function publishToChannel(channel, bookmarks, queueName) {
     });
 }
 
-return async function (ctx, callback) {
-    const { secrets } = ctx;
-    const notProvided = [
-        'RABBIT_URL', 'CHANNEL_NAME', 'AWS_SECRET_KEY_ID', 
-        'AWS_SECRET_KEY', 'DB_URL'
-    ].filter((envVar) => !secrets[envVar]);
+module.exports = function (ctx, callback) {
+    (async () => {
+        try {
+            console.log('Starting webtask as cron');
+    
+            const { secrets } = ctx;
+        
+            console.log(`Starting webtask for ${secrets.OPERATION}`);
+        
+            const notProvided = [
+                'RABBIT_URL', 'CHANNEL_NAME', 'AWS_SECRET_KEY_ID', 
+                'AWS_SECRET_KEY', 'DB_URL', 'OPERATION'
+            ].filter((envVar) => !secrets[envVar]);
+        
+            if (notProvided.length > 0) {
+                console.log("Invalid arguments", notProvided.join(","));
+                return callback(new Error(`ENV Vars not provided ${notProvided.join(',')}`))
+            }
+        
+        
+            const conn = await connect(secrets.RABBIT_URL);
+            const channel = await createChannelAsync(conn);
+        
+            console.log(`Rabbit connected for ${secrets.OPERATION}`);
+            switch (secrets.OPERATION) {
+                case 'MONITOR':
+                    // minute
+                    const remaining = await getMessageCountAsync(channel, secrets.CHANNEL_NAME);
+                    console.log(`I counted ${remaining} in queue`);
 
-    if (notProvided.length > 0) {
-        return callback(new Error(`ENV Vars not provided ${notProvided.join(',')}`))
-    }
-
-
-    const conn = await connect(secrets.RABBIT_URL);
-    const channel = await createChannelAsync(conn);
-
-    switch (secrets.OPERATION) {
-        case 'MONITOR':
-            // minute
-            const remaining = await getMessageCountAsync(channel, secrets.CHANNEL_NAME);
-            await putMetricData(secrets.AWS_SECRET_KEY_ID, secrets.AWS_SECRET_KEY, remaining);
-        case 'PUBLISHER':
-            // Each 20 minutes
-            const bookmarks = await getAllBookmarks(secrets.DB_URL);
-            publishToChannel(channel, bookmarks, secrets.CHANNEL_NAME);
-        default:
-            return callback(new Error('Invalid operation'))
-    }
-
-    callback(null, {
-        finished: role
-    });
+                    await publishMetricAsync(secrets.AWS_SECRET_KEY_ID, secrets.AWS_SECRET_KEY, remaining);
+                    console.log('published to cloudwatch');
+                case 'PUBLISHER':
+                    // Each 20 minutes
+                    console.log("Looking for bookmarks in the database");
+                    const bookmarks = await getAllBookmarks(secrets.DB_URL);
+                    console.log(`I see ${bookmarks.length} bookmarks in db`);
+                    publishToChannel(channel, bookmarks, secrets.CHANNEL_NAME);
+                    console.log('I pushed all to db');
+                default:
+                    return callback(new Error('Invalid operation'))
+            }
+        
+            callback(null, {
+                finished: role
+            });        
+        } catch (e) {
+            console.error(e);
+            callback(new Error('Unhandled Error while cronning'));
+        }
+    })();
 }
